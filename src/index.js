@@ -223,7 +223,7 @@ class SonosSpotifyPlaylistPlatform {
       } else {
         const zonesResponse = await axios.get(`${apiUrl}/zones`);
         const zones = zonesResponse.data.map(group => group.coordinator.roomName);
-        for (the zone of zones) {
+        for (const zone of zones) {
           if (zone !== coordinator) {
             await axios.get(`${apiUrl}/${encodeURIComponent(zone)}/join/${encodeURIComponent(coordinator)}`);
           }
