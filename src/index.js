@@ -5,16 +5,6 @@ const path = require('path');
 
 let Service, Characteristic;
 
-// Export both the platform registration function and the class
-module.exports = {
-  register: (api) => {
-    Service = api.hap.Service;
-    Characteristic = api.hap.Characteristic;
-    api.registerPlatform('SonosSpotifyPlaylist', SonosSpotifyPlaylistPlatform);
-  },
-  SonosSpotifyPlaylistPlatform
-};
-
 class SonosSpotifyPlaylistPlatform {
   constructor(log, config, api) {
     this.log = log;
@@ -32,7 +22,7 @@ class SonosSpotifyPlaylistPlatform {
 
     this.config.playlists.forEach((playlist, index) => {
       if (!playlist.name || !playlist.SpotifyPlaylistID) {
-        this.log.error(`Playlist ${index} is invalid: 'name' and 'SpotifyPlaylistID' are required`);
+        this.log.error(`Playlist ${index} is invalid: 'name' and 'SpotifyPlaylistID' are required');
       }
     });
 
@@ -171,7 +161,7 @@ class SonosSpotifyPlaylistPlatform {
     this.config.playlists.forEach((playlistConfig, index) => {
       this.log.info(`Processing playlist ${index}: ${JSON.stringify(playlistConfig)}`);
       if (!playlistConfig.name || !playlistConfig.SpotifyPlaylistID) {
-        this.log.error(`Skipping playlist ${index}: 'name' and 'SpotifyPlaylistID' are required`);
+        this.log.error(`Skipping playlist ${index}: 'name' and 'SpotifyPlaylistID' are required');
         return;
       }
       const uuid = this.api.hap.uuid.generate(`SonosSpotifyPlaylist:${index}:${playlistConfig.name}`);
@@ -247,3 +237,12 @@ class SonosSpotifyPlaylistPlatform {
     }
   }
 }
+
+module.exports = {
+  register: (api) => {
+    Service = api.hap.Service;
+    Characteristic = api.hap.Characteristic;
+    api.registerPlatform('SonosSpotifyPlaylist', SonosSpotifyPlaylistPlatform);
+  },
+  SonosSpotifyPlaylistPlatform
+};
