@@ -47,32 +47,54 @@ class SonosSpotifyPlaylistPlatform {
 
   async setupSonosHttpApi() {
     try {
-      await exec('npm list -g node-sonos-http-api', { timeout: 10000 });
-      this.log.info('node-sonos-http-api is already installed');
+      // Check if sonos-http-api is installed
+      await exec('npm list -g sonos-http-api', { timeout: 10000 });
+      this.log.info('sonos-http-api is already installed');
     } catch (error) {
-      this.log.info('Installing node-sonos-http-api from GitHub...');
+      this.log.info('sonos-http-api not found, attempting to uninstall any existing version...');
+      
+      // Uninstall any existing version to avoid conflicts
+      try {
+        await exec('sudo npm uninstall -g sonos-http-api', { timeout: 30000 });
+        this.log.info('Uninstalled existing sonos-http-api');
+      } catch (uninstallError) {
+        this.log.warn('Could not uninstall sonos-http-api:', uninstallError.message);
+      }
+
+      // Install the package from GitHub
+      this.log.info('Installing sonos-http-api from GitHub...');
       try {
         await exec('sudo npm install -g jishi/node-sonos-http-api', { timeout: 60000 });
-        this.log.info('node-sonos-http-api installed successfully');
+        this.log.info('sonos-http-api installed successfully');
       } catch (installError) {
-        this.log.error('Failed to install node-sonos-http-api:', installError.message);
+        this.log.error('Failed to install sonos-http-api:', installError.message);
         return;
       }
     }
 
     try {
+      // Check if the server is running
       await axios.get(`http://127.0.0.1:${this.sonosApiPort}/zones`, { timeout: 5000 });
-      this.log.info('node-sonos-http-api is running and responsive on port', this.sonosApiPort);
+      this.log.info('sonos-http-api is running and responsive on port', this.sonosApiPort);
     } catch (error) {
-      this.log.info('node-sonos-http-api not running, starting...');
+      this.log.info('sonos-http-api not running, starting...');
+      
+      // Ensure pm2 is installed
       try {
         await exec('pm2 list', { timeout: 10000 });
       } catch (pm2Error) {
         await exec('sudo npm install -g pm2', { timeout: 60000 });
       }
-      await exec(`pm2 start /home/homebridge/.npm-global/lib/node_modules/node-sonos-http-api/server.js --name sonos-http-api`, { timeout: 30000 });
+      
+      // Get the global node_modules path dynamically
+      const { stdout: globalPrefix } = await exec('npm config get prefix');
+      const nodeModulesPath = path.join(globalPrefix.trim(), 'lib', 'node_modules');
+      const serverPath = path.join(nodeModulesPath, 'sonos-http-api', 'server.js');
+      
+      // Start the server with the correct path
+      await exec(`pm2 start ${serverPath} --name sonos-http-api`, { timeout: 30000 });
       await exec('pm2 save', { timeout: 10000 });
-      this.log.info('node-sonos-http-api started on port', this.sonosApiPort);
+      this.log.info('sonos-http-api started on port', this.sonosApiPort);
     }
 
     const settingsPath = path.join(this.sonosApiPath, 'settings.json');
