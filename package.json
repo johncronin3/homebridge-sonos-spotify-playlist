@@ -17,8 +17,10 @@
   },
   "dependencies": {
     "axios": "^1.7.2",
-    "homebridge": "^1.9.0",
     "child-process-promise": "^2.2.1"
+  },
+  "peerDependencies": {
+    "homebridge": ">=1.9.0"
   },
   "author": "johncronin3",
   "license": "MIT",
