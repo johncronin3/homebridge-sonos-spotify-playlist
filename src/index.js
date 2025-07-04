@@ -31,10 +31,11 @@ class SonosSpotifyPlaylistPlatform {
     // Register didFinishLaunching event immediately
     this.api.on('didFinishLaunching', () => {
       this.log.info('didFinishLaunching event triggered');
-      // Add a slight delay to ensure platform is registered
+      // Increase delay to 2 seconds to ensure platform is registered
       setTimeout(() => {
+        this.log.info('Calling setupAccessories after delay');
         this.setupAccessories();
-      }, 1000);
+      }, 2000);
     });
 
     // Run setupSonosHttpApi and checkFirewall asynchronously
