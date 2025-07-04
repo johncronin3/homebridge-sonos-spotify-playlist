@@ -31,7 +31,10 @@ class SonosSpotifyPlaylistPlatform {
     // Register didFinishLaunching event immediately
     this.api.on('didFinishLaunching', () => {
       this.log.info('didFinishLaunching event triggered');
-      this.setupAccessories();
+      // Add a slight delay to ensure platform is registered
+      setTimeout(() => {
+        this.setupAccessories();
+      }, 1000);
     });
 
     // Run setupSonosHttpApi and checkFirewall asynchronously
@@ -220,7 +223,7 @@ class SonosSpotifyPlaylistPlatform {
       } else {
         const zonesResponse = await axios.get(`${apiUrl}/zones`);
         const zones = zonesResponse.data.map(group => group.coordinator.roomName);
-        for (const zone of zones) {
+        for (the zone of zones) {
           if (zone !== coordinator) {
             await axios.get(`${apiUrl}/${encodeURIComponent(zone)}/join/${encodeURIComponent(coordinator)}`);
           }
