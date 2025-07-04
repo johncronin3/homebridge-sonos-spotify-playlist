@@ -55,16 +55,16 @@ class SonosSpotifyPlaylistPlatform {
       
       // Uninstall any existing version to avoid conflicts
       try {
-        await exec('sudo npm uninstall -g sonos-http-api', { timeout: 30000 });
+        await exec('npm uninstall -g sonos-http-api', { timeout: 30000 });
         this.log.info('Uninstalled existing sonos-http-api');
       } catch (uninstallError) {
         this.log.warn('Could not uninstall sonos-http-api:', uninstallError.message);
       }
 
-      // Install the package from GitHub
+      // Install the package from GitHub without sudo
       this.log.info('Installing sonos-http-api from GitHub...');
       try {
-        await exec('sudo npm install -g jishi/node-sonos-http-api', { timeout: 60000 });
+        await exec('npm install -g jishi/node-sonos-http-api', { timeout: 60000 });
         this.log.info('sonos-http-api installed successfully');
       } catch (installError) {
         this.log.error('Failed to install sonos-http-api:', installError.message);
@@ -79,11 +79,11 @@ class SonosSpotifyPlaylistPlatform {
     } catch (error) {
       this.log.info('sonos-http-api not running, starting...');
       
-      // Ensure pm2 is installed
+      // Ensure pm2 is installed without sudo
       try {
         await exec('pm2 list', { timeout: 10000 });
       } catch (pm2Error) {
-        await exec('sudo npm install -g pm2', { timeout: 60000 });
+        await exec('npm install -g pm2', { timeout: 60000 });
       }
       
       // Get the global node_modules path dynamically
@@ -103,11 +103,13 @@ class SonosSpotifyPlaylistPlatform {
       basedir: this.sonosApiPath
     };
     await fs.mkdir(this.sonosApiPath, { recursive: true });
+    await fs.chmod(this.sonosApiPath, 0o700); // Set directory permissions to 700
     await fs.writeFile(settingsPath, JSON.stringify(settings, null, 2));
-    await exec(`sudo chown homebridge:homebridge ${settingsPath}`);
+    await fs.chmod(settingsPath, 0o600); // Set file permissions to 600
 
     const presetsPath = path.join(this.sonosApiPath, 'presets');
     await fs.mkdir(presetsPath, { recursive: true });
+    await fs.chmod(presetsPath, 0o700); // Set directory permissions to 700
     const presetPath = path.join(presetsPath, 'default.json');
     const defaultPreset = {
       players: [{ roomName: 'Bedroom', volume: 15 }],
@@ -116,7 +118,7 @@ class SonosSpotifyPlaylistPlatform {
       uri: this.config.playlists[0]?.SpotifyPlaylistID || 'spotify:playlist:50h5sCtsaBWefyv51GAtmI'
     };
     await fs.writeFile(presetPath, JSON.stringify(defaultPreset, null, 2));
-    await exec(`sudo chown -R homebridge:homebridge ${this.sonosApiPath}`);
+    await fs.chmod(presetPath, 0o600); // Set file permissions to 600
 
     try {
       const response = await axios.get(`http://127.0.0.1:${this.sonosApiPort}/zones`, { timeout: 5000 });
