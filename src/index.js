@@ -28,7 +28,7 @@ class SonosSpotifyPlaylistPlatform {
 
     this.config.playlists.forEach((playlist, index) => {
       if (!playlist.name || !playlist.SpotifyPlaylistID) {
-        this.log.error(`Playlist ${index} is invalid: 'name' and 'SpotifyPlaylistID' are required');
+        this.log.error("Playlist ${index} is invalid: 'name' and 'SpotifyPlaylistID' are required");
       }
     });
 
