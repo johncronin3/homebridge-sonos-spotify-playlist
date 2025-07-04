@@ -95,6 +95,22 @@ class SonosSpotifyPlaylistPlatform {
       await exec(`pm2 start ${serverPath} --name sonos-http-api`, { timeout: 30000 });
       await exec('pm2 save', { timeout: 10000 });
       this.log.info('sonos-http-api started on port', this.sonosApiPort);
+      
+      // Wait 5 seconds for the server to initialize
+      await new Promise(resolve => setTimeout(resolve, 5000));
+      
+      // Check again if the server is responsive
+      try {
+        const response = await axios.get(`http://127.0.0.1:${this.sonosApiPort}/zones`, { timeout: 5000 });
+        this.log.info('Sonos zones discovered:', JSON.stringify(response.data));
+      } catch (startError) {
+        this.log.error(
+          'Failed to connect to sonos-http-api on port', this.sonosApiPort,
+          '. The port may be blocked by a firewall or in use by another process.',
+          'Please ensure port', this.sonosApiPort, 'is open in your firewall (e.g., run `sudo ufw allow', this.sonosApiPort, '`)',
+          'and that no other application is using it. You can also check the server logs with `pm2 logs sonos-http-api`.'
+        );
+      }
     }
 
     const settingsPath = path.join(this.sonosApiPath, 'settings.json');
@@ -119,43 +135,16 @@ class SonosSpotifyPlaylistPlatform {
     };
     await fs.writeFile(presetPath, JSON.stringify(defaultPreset, null, 2));
     await fs.chmod(presetPath, 0o600); // Set file permissions to 600
-
-    try {
-      const response = await axios.get(`http://127.0.0.1:${this.sonosApiPort}/zones`, { timeout: 5000 });
-      this.log.info('Sonos zones discovered:', JSON.stringify(response.data));
-    } catch (error) {
-      this.log.error('Failed to discover Sonos zones:', error.message);
-    }
   }
 
   async checkFirewall() {
-    try {
-      await exec('sudo ufw status', { timeout: 5000 });
-      const ufwStatus = await exec('sudo ufw status numbered', { timeout: 5000 });
-      if (ufwStatus.stdout.includes('Status: active')) {
-        const requiredPorts = ['1900/udp', this.sonosApiPort.toString(), '51826', '5353/udp'];
-        const rules = ufwStatus.stdout.split('\n');
-        const missingPorts = requiredPorts.filter(port => !rules.some(rule => rule.includes(port)));
-        if (missingPorts.length > 0) {
-          this.log.warn(`Firewall (ufw) may block plugin functionality. Missing ports: ${missingPorts.join(', ')}. Run:
-            sudo ufw allow 1900/udp
-            sudo ufw allow proto udp to 239.255.255.250 port 1900
-            sudo ufw allow proto udp from 192.168.1.0/24 port 1900
-            sudo ufw allow ${this.sonosApiPort}
-            sudo ufw allow 51826
-            sudo ufw allow 5353/udp
-            sudo ufw reload
-          `);
-        } else {
-          this.log.info('Firewall (ufw) appears configured for required ports');
-        }
-      } else {
-        this.log.info('ufw is inactive; ensure no other firewall blocks ports 1900/udp, 5005, 51826, 5353/udp');
-      }
-    } catch (error) {
-      this.log.warn('Could not check ufw status:', error.message);
-      this.log.warn('Ensure firewall allows ports 1900/udp, 5005, 51826, 5353/udp');
-    }
+    this.log.info('Please ensure your firewall allows the following ports for the plugin to function correctly: 1900/udp, 5005, 51826, 5353/udp');
+    this.log.info('If you are using ufw, you can run the following commands to allow these ports:');
+    this.log.info('sudo ufw allow 1900/udp');
+    this.log.info('sudo ufw allow 5005');
+    this.log.info('sudo ufw allow 51826');
+    this.log.info('sudo ufw allow 5353/udp');
+    this.log.info('sudo ufw reload');
   }
 
   setupAccessories() {
