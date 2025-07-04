@@ -15,6 +15,8 @@ class SonosSpotifyPlaylistPlatform {
     this.sonosApiPort = config.sonosApiPort || 5005;
     this.activePlaylist = null;
 
+    this.log.info('Constructor called for SonosSpotifyPlaylistPlatform');
+
     if (!this.config.playlists || !Array.isArray(this.config.playlists)) {
       this.log.error('No playlists configured or invalid configuration');
       return;
@@ -26,19 +28,18 @@ class SonosSpotifyPlaylistPlatform {
       }
     });
 
-    this.setupSonosHttpApi().then(() => {
-      this.checkFirewall().then(() => {
-        this.api.on('didFinishLaunching', () => {
-          this.log.info('didFinishLaunching event triggered');
-          this.setupAccessories();
-        });
-      });
-    }).catch(error => {
-      this.log.error('Error in setupSonosHttpApi or checkFirewall:', error.message);
-      this.api.on('didFinishLaunching', () => {
-        this.log.info('didFinishLaunching event triggered despite setup error');
-        this.setupAccessories();
-      });
+    // Register didFinishLaunching event immediately
+    this.api.on('didFinishLaunching', () => {
+      this.log.info('didFinishLaunching event triggered');
+      this.setupAccessories();
+    });
+
+    // Run setupSonosHttpApi and checkFirewall asynchronously
+    this.setupSonosHttpApi().catch(error => {
+      this.log.error('Error in setupSonosHttpApi:', error.message);
+    });
+    this.checkFirewall().catch(error => {
+      this.log.error('Error in checkFirewall:', error.message);
     });
   }
 
@@ -238,7 +239,6 @@ class SonosSpotifyPlaylistPlatform {
   }
 }
 
-// Export the initializer function for Homebridge and the class for testing
 module.exports = (api) => {
   Service = api.hap.Service;
   Characteristic = api.hap.Characteristic;
