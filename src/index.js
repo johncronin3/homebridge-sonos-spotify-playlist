@@ -22,7 +22,7 @@ class SonosSpotifyPlaylistPlatform {
 
     this.config.playlists.forEach((playlist, index) => {
       if (!playlist.name || !playlist.SpotifyPlaylistID) {
-        this.log.error(`Playlist ${index} is invalid: 'name' and 'SpotifyPlaylistID' are required');
+        this.log.error(`Playlist ${index} is invalid: 'name' and 'SpotifyPlaylistID' are required`);
       }
     });
 
@@ -161,7 +161,7 @@ class SonosSpotifyPlaylistPlatform {
     this.config.playlists.forEach((playlistConfig, index) => {
       this.log.info(`Processing playlist ${index}: ${JSON.stringify(playlistConfig)}`);
       if (!playlistConfig.name || !playlistConfig.SpotifyPlaylistID) {
-        this.log.error(`Skipping playlist ${index}: 'name' and 'SpotifyPlaylistID' are required');
+        this.log.error(`Playlist ${index} is invalid: 'name' and 'SpotifyPlaylistID' are required`);
         return;
       }
       const uuid = this.api.hap.uuid.generate(`SonosSpotifyPlaylist:${index}:${playlistConfig.name}`);
