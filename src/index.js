@@ -31,7 +31,7 @@ class SonosSpotifyPlaylistPlatform {
     // Register didFinishLaunching event immediately
     this.api.on('didFinishLaunching', () => {
       this.log.info('didFinishLaunching event triggered');
-      // Increase delay to 2 seconds to ensure platform is registered
+      // Delay to ensure platform is registered
       setTimeout(() => {
         this.log.info('Calling setupAccessories after delay');
         this.setupAccessories();
@@ -190,12 +190,12 @@ class SonosSpotifyPlaylistPlatform {
     });
 
     if (this._accessories.length > 0) {
-      this.log.info(`Registering ${this._accessories.length} accessories with Homebridge`);
+      this.log.info(`Publishing ${this._accessories.length} external accessories with Homebridge`);
       try {
-        this.api.registerPlatformAccessories('homebridge-sonos-spotify-playlist', 'SonosSpotifyPlaylist', this._accessories);
-        this.log.info('Successfully registered all playlist accessories with Homebridge');
+        this.api.publishExternalAccessories('homebridge-sonos-spotify-playlist', this._accessories);
+        this.log.info('Successfully published all playlist accessories with Homebridge');
       } catch (error) {
-        this.log.error('Failed to register accessories with Homebridge:', error.message);
+        this.log.error('Failed to publish accessories with Homebridge:', error.message);
       }
     } else {
       this.log.warn('No accessories were added. Check your playlist configuration.');
