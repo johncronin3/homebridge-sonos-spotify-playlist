@@ -1,7 +1,8 @@
 {
-  "name": "sonos-spotify-playist",
-  "version": "1.0.0",
-  "main": "index.js",
+  "name": "homebridge-sonos-spotify-playlist",
+  "version": "1.0.1", // Increment for state management update
+  "description": "Homebridge plugin to control Sonos Spotify playlists via sonos-http-api",
+  "main": "src/index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
@@ -19,6 +20,14 @@
     "homebridge": "^1.9.0",
     "child-process-promise": "^2.2.1"
   },
-  "author": "John Cronin",
-  "license": "MIT"
+  "author": "johncronin3",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/johncronin3/homebridge-sonos-spotify-playlist.git"
+  },
+  "bugs": {
+    "url": "https://github.com/johncronin3/homebridge-sonos-spotify-playlist/issues"
+  },
+  "homepage": "https://github.com/johncronin3/homebridge-sonos-spotify-playlist#readme"
 }
