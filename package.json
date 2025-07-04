@@ -1,6 +1,6 @@
 {
   "name": "homebridge-sonos-spotify-playlist",
-  "version": "1.0.9",
+  "version": "1.0.10",
   "description": "Homebridge plugin to control Sonos Spotify playlists via node-sonos-http-api",
   "main": "src/index.js",
   "scripts": {
