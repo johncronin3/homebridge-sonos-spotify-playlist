@@ -16,7 +16,7 @@ class SonosSpotifyPlaylistPlatform {
     this.log = log;
     this.config = config;
     this.api = api;
-    this.accessories = [];
+    this._accessories = [];
     this.sonosApiPath = '/home/homebridge/.sonos-http-api';
     this.sonosApiPort = config.sonosApiPort || 5005;
     this.activePlaylist = null;
@@ -42,7 +42,7 @@ class SonosSpotifyPlaylistPlatform {
   }
 
   accessories(callback) {
-    callback(this.accessories);
+    callback(this._accessories);
   }
 
   async setupSonosHttpApi() {
@@ -135,7 +135,7 @@ class SonosSpotifyPlaylistPlatform {
   }
 
   setupAccessories() {
-    this.accessories = [];
+    this._accessories = [];
     this.config.playlists.forEach((playlistConfig, index) => {
       if (!playlistConfig.name || !playlistConfig.SpotifyPlaylistID) {
         this.log.error(`Skipping playlist ${index}: 'name' and 'SpotifyPlaylistID' are required`);
@@ -156,10 +156,14 @@ class SonosSpotifyPlaylistPlatform {
           }
         });
 
-      this.accessories.push(accessory);
-      this.api.publishExternalAccessories('homebridge-sonos-spotify-playlist', [accessory]);
+      this._accessories.push(accessory);
       this.log.info(`Added accessory: ${playlistConfig.name}`);
     });
+
+    if (this._accessories.length > 0) {
+      this.api.registerPlatformAccessories('homebridge-sonos-spotify-playlist', 'SonosSpotifyPlaylist', this._accessories);
+      this.log.info('Registered all playlist accessories with Homebridge');
+    }
   }
 
   async handleSwitchSet(config, value, currentService) {
@@ -168,7 +172,7 @@ class SonosSpotifyPlaylistPlatform {
     const apiUrl = `http://127.0.0.1:${this.sonosApiPort}`;
 
     if (value) {
-      for (const accessory of this.accessories) {
+      for (const accessory of this._accessories) {
         const service = accessory.getService(Service.Switch);
         if (service !== currentService) {
           service.getCharacteristic(Characteristic.On).updateValue(false);
