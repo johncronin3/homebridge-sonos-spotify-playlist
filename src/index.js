@@ -13,6 +13,7 @@ class SonosSpotifyPlaylistPlatform {
     this._accessories = [];
     this.sonosApiPath = '/home/homebridge/.sonos-http-api';
     this.sonosApiPort = config.sonosApiPort || 5005;
+    this.sonosApiHost = config.sonosApiHost || '127.0.0.1';
     this.activePlaylist = null;
 
     this.log.info('Constructor called for SonosSpotifyPlaylistPlatform');
@@ -28,18 +29,13 @@ class SonosSpotifyPlaylistPlatform {
       }
     });
 
-    // Register didFinishLaunching event immediately
     this.api.on('didFinishLaunching', () => {
       this.log.info('didFinishLaunching event triggered');
       this.setupAccessories();
     });
 
-    // Run setupSonosHttpApi and checkFirewall asynchronously
     this.setupSonosHttpApi().catch(error => {
       this.log.error('Error in setupSonosHttpApi:', error.message);
-    });
-    this.checkFirewall().catch(error => {
-      this.log.error('Error in checkFirewall:', error.message);
     });
   }
 
@@ -71,51 +67,64 @@ class SonosSpotifyPlaylistPlatform {
       }
     }
 
+    // Apply firewall rules before checking API
+    await this.checkFirewall();
+
     try {
-      // Check if the server is running
-      await axios.get(`http://127.0.0.1:${this.sonosApiPort}/zones`, { timeout: 5000 });
-      this.log.info('sonos-http-api is running and responsive on port', this.sonosApiPort);
+      // Check if the server is running and zones are discovered
+      const response = await axios.get(`http://${this.sonosApiHost}:${this.sonosApiPort}/zones`, { timeout: 5000 });
+      if (response.data && Array.isArray(response.data) && response.data.length > 0) {
+        this.log.info('Sonos zones discovered successfully:', response.data.length, 'zones found');
+      } else {
+        this.log.warn('No Sonos zones discovered. Firewall rules applied, but verification failed.');
+        this.suggestFirewallManualCheck();
+      }
     } catch (error) {
-      this.log.info('sonos-http-api not running, starting...');
+      this.log.error(
+        'Failed to connect to sonos-http-api on', this.sonosApiHost, 'port', this.sonosApiPort,
+        '. Error:', error.message
+      );
+      this.suggestFirewallManualCheck();
+
+      this.log.info('Attempting to start sonos-http-api...');
       try {
-        // Ensure pm2 is installed
         await exec('pm2 list', { timeout: 10000 });
       } catch (pm2Error) {
         await exec('npm install -g pm2', { timeout: 60000 });
       }
 
-      // Get the global node_modules path dynamically
       const { stdout: globalPrefix } = await exec('npm config get prefix');
       const nodeModulesPath = path.join(globalPrefix.trim(), 'lib', 'node_modules');
       const serverPath = path.join(nodeModulesPath, 'sonos-http-api', 'server.js');
 
       try {
-        // Start the server with the correct path
         await exec(`pm2 start ${serverPath} --name sonos-http-api`, { timeout: 30000 });
         await exec('pm2 save', { timeout: 10000 });
-        this.log.info('sonos-http-api started on port', this.sonosApiPort);
+        this.log.info('sonos-http-api started on', this.sonosApiHost, 'port', this.sonosApiPort);
 
-        // Wait 5 seconds for the server to initialize
         await new Promise(resolve => setTimeout(resolve, 5000));
-
-        // Check again if the server is responsive
-        await axios.get(`http://127.0.0.1:${this.sonosApiPort}/zones`, { timeout: 5000 });
-        this.log.info('Sonos zones discovered successfully');
+        const response = await axios.get(`http://${this.sonosApiHost}:${this.sonosApiPort}/zones`, { timeout: 5000 });
+        if (response.data && Array.isArray(response.data) && response.data.length > 0) {
+          this.log.info('Sonos zones discovered successfully after restart:', response.data.length, 'zones found');
+        } else {
+          this.log.warn('No Sonos zones discovered after restart. Please check network configuration.');
+          this.suggestFirewallManualCheck();
+        }
       } catch (startError) {
         this.log.error(
-          'Failed to connect to sonos-http-api on port', this.sonosApiPort,
-          '. The port may be blocked by a firewall or in use by another process.',
-          'Please ensure port', this.sonosApiPort, 'is open (e.g., run `sudo ufw allow', this.sonosApiPort, '`)',
-          'and that no other application is using it. Check server logs with `pm2 logs sonos-http-api`.'
+          'Failed to start or connect to sonos-http-api on', this.sonosApiHost, 'port', this.sonosApiPort,
+          '. Error:', startError.message
         );
+        this.suggestFirewallManualCheck();
       }
     }
 
-    // Setup settings and presets
     const settingsPath = path.join(this.sonosApiPath, 'settings.json');
     const settings = {
       port: this.sonosApiPort,
-      basedir: this.sonosApiPath
+      basedir: this.sonosApiPath,
+      ip: this.sonosApiHost,
+      logLevel: 'trace'
     };
     try {
       await fs.mkdir(this.sonosApiPath, { recursive: true });
@@ -145,13 +154,41 @@ class SonosSpotifyPlaylistPlatform {
   }
 
   async checkFirewall() {
-    this.log.info('Please ensure your firewall allows the following ports for the plugin to function correctly: 1900/udp, 5005, 51826, 5353/udp');
-    this.log.info('If using ufw, run the following commands to allow these ports:');
+    this.log.info('Checking and applying firewall rules for sonos-http-api...');
+    const ufwCommands = [
+      'ufw allow 3500/tcp',
+      'ufw allow 1905/udp',
+      'ufw allow 1900/udp',
+      'ufw allow 5005',
+      'ufw allow out 1400/tcp',
+      'ufw allow 239.255.255.250:1900/udp',
+      'ufw reload'
+    ];
+
+    for (const command of ufwCommands) {
+      try {
+        await exec(`sudo ${command}`, { timeout: 10000 });
+        this.log.info(`Successfully executed: ${command}`);
+      } catch (error) {
+        this.log.warn(`Failed to execute '${command}': ${error.message}`);
+        this.log.info('You may need to run this command manually with sudo privileges.');
+      }
+    }
+
+    this.log.info('Firewall rules applied. If issues persist, manually verify with:');
+    this.suggestFirewallManualCheck();
+  }
+
+  suggestFirewallManualCheck() {
+    this.log.info('Please ensure your firewall allows the following ports for sonos-http-api:');
+    this.log.info('  sudo ufw allow 3500/tcp');
+    this.log.info('  sudo ufw allow 1905/udp');
     this.log.info('  sudo ufw allow 1900/udp');
     this.log.info('  sudo ufw allow 5005');
-    this.log.info('  sudo ufw allow 51826');
-    this.log.info('  sudo ufw allow 5353/udp');
+    this.log.info('  sudo ufw allow out 1400/tcp');
+    this.log.info('  sudo ufw allow 239.255.255.250:1900/udp');
     this.log.info('  sudo ufw reload');
+    this.log.info('Also ensure multicast is enabled on your network interface (e.g., `sudo ip link set wlan0 multicast on`).');
   }
 
   setupAccessories() {
@@ -178,6 +215,9 @@ class SonosSpotifyPlaylistPlatform {
             await this.handleSwitchSet(playlistConfig, value, service);
           } catch (error) {
             this.log.error(`Error handling switch for ${playlistConfig.name}: ${error.message}`);
+            if (error.response && error.response.data && error.response.data.error.includes('No system has yet been discovered')) {
+              this.suggestFirewallManualCheck();
+            }
           }
         });
 
@@ -201,40 +241,48 @@ class SonosSpotifyPlaylistPlatform {
   async handleSwitchSet(config, value, currentService) {
     const { name, Zones, SpotifyPlaylistID, shuffle = 'off', repeat = 'off' } = config;
     const coordinator = Zones && Zones.split(',')[0] ? Zones.split(',')[0].trim() : 'Bedroom';
-    const apiUrl = `http://127.0.0.1:${this.sonosApiPort}`;
+    const apiUrl = `http://${this.sonosApiHost}:${this.sonosApiPort}`;
 
-    if (value) {
-      for (const accessory of this._accessories) {
-        const service = accessory.getService(Service.Switch);
-        if (service !== currentService) {
-          service.getCharacteristic(Characteristic.On).updateValue(false);
-        }
-      }
-      this.activePlaylist = name;
-
-      if (Zones && Zones !== 'ALL') {
-        const zones = Zones.split(',').map(zone => zone.trim());
-        for (const zone of zones.slice(1)) {
-          await axios.get(`${apiUrl}/${encodeURIComponent(zone)}/join/${encodeURIComponent(coordinator)}`);
-        }
-      } else {
-        const zonesResponse = await axios.get(`${apiUrl}/zones`);
-        const zones = zonesResponse.data.map(group => group.coordinator.roomName);
-        for (const zone of zones) {
-          if (zone !== coordinator) {
-            await axios.get(`${apiUrl}/${encodeURIComponent(zone)}/join/${encodeURIComponent(coordinator)}`);
+    try {
+      if (value) {
+        for (const accessory of this._accessories) {
+          const service = accessory.getService(Service.Switch);
+          if (service !== currentService) {
+            service.getCharacteristic(Characteristic.On).updateValue(false);
           }
         }
-      }
+        this.activePlaylist = name;
 
-      await axios.get(`${apiUrl}/${encodeURIComponent(coordinator)}/spotify/now/${SpotifyPlaylistID}`);
-      await axios.get(`${apiUrl}/${encodeURIComponent(coordinator)}/shuffle/${shuffle}`);
-      await axios.get(`${apiUrl}/${encodeURIComponent(coordinator)}/repeat/${repeat}`);
-      this.log.info(`Playing ${name} on ${coordinator} (shuffle: ${shuffle}, repeat: ${repeat})`);
-    } else {
-      await axios.get(`${apiUrl}/${encodeURIComponent(coordinator)}/pause`);
-      this.log.info(`Paused ${name} on ${coordinator}`);
-      this.activePlaylist = null;
+        if (Zones && Zones !== 'ALL') {
+          const zones = Zones.split(',').map(zone => zone.trim());
+          for (const zone of zones.slice(1)) {
+            await axios.get(`${apiUrl}/${encodeURIComponent(zone)}/join/${encodeURIComponent(coordinator)}`);
+          }
+        } else {
+          const zonesResponse = await axios.get(`${apiUrl}/zones`);
+          const zones = zonesResponse.data.map(group => group.coordinator.roomName);
+          for (const zone of zones) {
+            if (zone !== coordinator) {
+              await axios.get(`${apiUrl}/${encodeURIComponent(zone)}/join/${encodeURIComponent(coordinator)}`);
+            }
+          }
+        }
+
+        await axios.get(`${apiUrl}/${encodeURIComponent(coordinator)}/spotify/now/${SpotifyPlaylistID}`);
+        await axios.get(`${apiUrl}/${encodeURIComponent(coordinator)}/shuffle/${shuffle}`);
+        await axios.get(`${apiUrl}/${encodeURIComponent(coordinator)}/repeat/${repeat}`);
+        this.log.info(`Playing ${name} on ${coordinator} (shuffle: ${shuffle}, repeat: ${repeat})`);
+      } else {
+        await axios.get(`${apiUrl}/${encodeURIComponent(coordinator)}/pause`);
+        this.log.info(`Paused ${name} on ${coordinator}`);
+        this.activePlaylist = null;
+      }
+    } catch (error) {
+      this.log.error(`Error in handleSwitchSet for ${name}:`, error.message);
+      if (error.response && error.response.data && error.response.data.error.includes('No system has yet been discovered')) {
+        this.suggestFirewallManualCheck();
+      }
+      throw error;
     }
   }
 }
@@ -245,5 +293,4 @@ module.exports = (api) => {
   api.registerPlatform('SonosSpotifyPlaylist', SonosSpotifyPlaylistPlatform);
 };
 
-// Expose the class for testing purposes
 module.exports.SonosSpotifyPlaylistPlatform = SonosSpotifyPlaylistPlatform;
