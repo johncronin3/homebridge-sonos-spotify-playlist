@@ -45,7 +45,6 @@ class SonosSpotifyPlaylistPlatform {
 
   async setupSonosHttpApi() {
     try {
-      // Check if sonos-http-api is installed
       await exec('npm list -g sonos-http-api', { timeout: 10000 });
       this.log.info('sonos-http-api is already installed');
     } catch (error) {
@@ -67,11 +66,9 @@ class SonosSpotifyPlaylistPlatform {
       }
     }
 
-    // Apply firewall rules before checking API
     await this.checkFirewall();
 
     try {
-      // Check if the server is running and zones are discovered
       const response = await axios.get(`http://${this.sonosApiHost}:${this.sonosApiPort}/zones`, { timeout: 5000 });
       if (response.data && Array.isArray(response.data) && response.data.length > 0) {
         this.log.info('Sonos zones discovered successfully:', response.data.length, 'zones found');
@@ -240,7 +237,6 @@ class SonosSpotifyPlaylistPlatform {
 
   async handleSwitchSet(config, value, currentService) {
     const { name, Zones, SpotifyPlaylistID, shuffle = 'off', repeat = 'off' } = config;
-    const coordinator = Zones && Zones.split(',')[0] ? Zones.split(',')[0].trim() : 'Bedroom';
     const apiUrl = `http://${this.sonosApiHost}:${this.sonosApiPort}`;
 
     try {
@@ -253,18 +249,29 @@ class SonosSpotifyPlaylistPlatform {
         }
         this.activePlaylist = name;
 
+        let coordinator;
         if (Zones && Zones !== 'ALL') {
           const zones = Zones.split(',').map(zone => zone.trim());
+          coordinator = zones[0]; // Use the first zone as coordinator
           for (const zone of zones.slice(1)) {
             await axios.get(`${apiUrl}/${encodeURIComponent(zone)}/join/${encodeURIComponent(coordinator)}`);
+            this.log.info(`Joined zone ${zone} to coordinator ${coordinator}`);
           }
         } else {
-          const zonesResponse = await axios.get(`${apiUrl}/zones`);
-          const zones = zonesResponse.data.map(group => group.coordinator.roomName);
-          for (const zone of zones) {
-            if (zone !== coordinator) {
-              await axios.get(`${apiUrl}/${encodeURIComponent(zone)}/join/${encodeURIComponent(coordinator)}`);
-            }
+          // Fetch zones from API
+          const zonesResponse = await axios.get(`${apiUrl}/zones`, { timeout: 5000 });
+          if (!zonesResponse.data || !Array.isArray(zonesResponse.data) || zonesResponse.data.length === 0) {
+            throw new Error('No zones found. Ensure Sonos devices are online and discoverable.');
+          }
+          const zones = zonesResponse.data.map(group => group.coordinator.roomName).filter(name => name);
+          if (zones.length === 0) {
+            throw new Error('No valid zone room names found in API response.');
+          }
+          coordinator = zones[0]; // Use the first zone as coordinator
+          this.log.info(`Selected coordinator: ${coordinator}`);
+          for (const zone of zones.slice(1)) {
+            await axios.get(`${apiUrl}/${encodeURIComponent(zone)}/join/${encodeURIComponent(coordinator)}`);
+            this.log.info(`Joined zone ${zone} to coordinator ${coordinator}`);
           }
         }
 
@@ -273,14 +280,18 @@ class SonosSpotifyPlaylistPlatform {
         await axios.get(`${apiUrl}/${encodeURIComponent(coordinator)}/repeat/${repeat}`);
         this.log.info(`Playing ${name} on ${coordinator} (shuffle: ${shuffle}, repeat: ${repeat})`);
       } else {
+        const coordinator = Zones && Zones.split(',')[0] ? Zones.split(',')[0].trim() : 'Bedroom';
         await axios.get(`${apiUrl}/${encodeURIComponent(coordinator)}/pause`);
         this.log.info(`Paused ${name} on ${coordinator}`);
         this.activePlaylist = null;
       }
     } catch (error) {
       this.log.error(`Error in handleSwitchSet for ${name}:`, error.message);
-      if (error.response && error.response.data && error.response.data.error.includes('No system has yet been discovered')) {
-        this.suggestFirewallManualCheck();
+      if (error.response && error.response.data && error.response.data.error) {
+        this.log.error('API response error:', error.response.data.error);
+        if (error.response.data.error.includes('No system has yet been discovered')) {
+          this.suggestFirewallManualCheck();
+        }
       }
       throw error;
     }
